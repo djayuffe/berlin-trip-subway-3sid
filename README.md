@@ -38,7 +38,8 @@ source. The assembled program is written to
 The source-level music review is retained in
 [`V6_0_0_MUSIC_AUDIT.json`](V6_0_0_MUSIC_AUDIT.json), and the accompanying
 arrangement notes are in [`V6_0_0_NOTES.md`](V6_0_0_NOTES.md). See
-[`AUDIT.md`](AUDIT.md) for the repository cleanup and verification record.
+[`AUDIT.md`](AUDIT.md) for the repository cleanup and verification record, and
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the effect and function map.
 
 ## Verification
 
@@ -46,6 +47,5 @@ arrangement notes are in [`V6_0_0_NOTES.md`](V6_0_0_NOTES.md). See
 make check
 ```
 
-This rebuilds the PRG, checks both 96-by-40 wire-cube assets, and verifies the
-tracked-source checksums. Run `make checksums` only after an intentional source
-or documentation change.
+This rebuilds the PRG and verifies the tracked-source checksums. Run
+`make checksums` only after an intentional source or documentation change.

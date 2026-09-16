@@ -20,7 +20,6 @@ import.
 
 ## Verification
 
-`make check` performs a fresh ACME build, verifies the two 3,840-byte
-wire-cube assets, and validates the tracked-source checksum manifest. A bounded
-VICE console smoke test has also been run using SID addresses `$d400`, `$d420`,
-and `$d440`.
+`make check` performs a fresh ACME build and validates the tracked-source
+checksum manifest. A bounded VICE console smoke test has also been run using
+SID addresses `$d400`, `$d420`, and `$d440`.

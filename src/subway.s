@@ -134,11 +134,6 @@ MUS_SPEED  = 6                      ; frames per pattern row
 
 IRQ_LINE    = 250
 
-; --- Matrix colours ---
-COL_GREEN   = 5
-COL_LGREEN  = 13
-COL_HEAD    = 1
-
 ; --- zero page (music in IRQ must stay disjoint from effects in main loop) ---
 ZP_MLO  = $f7      ; music: melody pattern ptr
 ZP_MHI  = $f8
@@ -586,6 +581,11 @@ InitPart:
         lda InitTbl+1,x
         sta TXTP_HI
         jmp (TXTP)
+; Index order: pulse, plasma, hyperspace, xor, waves, tunnel, starfield,
+; fire, heart, multiplex cube, yaw tunnel, turbo tunnel, gold heart,
+; raster grid, cyber grid, safe tunnel, black orbit, rotor cube, solar,
+; prism, twist, infinity corridor, gold trench, cube rotor, vortex, mux edge,
+; raster boot, wire cube.
 InitTbl:
         !word ti_init, pl_init, hs_init, xr_init, wv_init, tn_init, ss_init
         !word ts_init, hv_init, mc_init, yw_init, tb_init, gh_init, rg_init, cg_init, sp_init, bo_init, rc_init
@@ -620,7 +620,6 @@ PrintCenteredAuto:
         bne @m
 @d:     jmp PrintCentered       ; X=row, Y=length
 
-; Re-colour the two card rows (10 and 13) with a cycling hue.
 ; PrintCentered: TXTP -> text ($ff term), X=row, Y=length -> centred on row X
 PrintCentered:
         ; col = (40 - len) / 2
@@ -714,169 +713,7 @@ tiPhase !byte 0
 tiRow   !byte 0
 
 ; ============================================================================
-;  PART 1 : DIGITAL RAIN (Matrix)
-; ============================================================================
-!zone matrix
-MR_COLS = 40
-mr_y      !fill MR_COLS,0
-mr_speed  !fill MR_COLS,1
-mr_tick   !fill MR_COLS,0
-mr_len    !fill MR_COLS,5
-mrBeat    !byte 0
-
-mr_init:
-        ; whole field black/space (already cleared), seed columns
-        ldx #0
-.ic:    jsr Rand8
-        and #$1f
-        eor #$1f
-        clc
-        adc #$e0                ; y in 224..255 (off top)
-        sta mr_y,x
-        jsr Rand8
-        and #3
-        clc
-        adc #1
-        sta mr_speed,x
-        sta mr_tick,x
-        jsr Rand8
-        and #7
-        clc
-        adc #3
-        sta mr_len,x
-        inx
-        cpx #MR_COLS
-        bne .ic
-        rts
-
-mr_update:
-        lda TV_FlashI            ; rain falls faster on the beat
-        lsr
-        lsr
-        lsr
-        sta mrBeat
-        ldx #0
-.col:
-        lda mr_tick,x
-        beq .step
-        dec mr_tick,x
-        jmp .next
-.step:
-        lda mr_speed,x
-        sec
-        sbc mrBeat
-        bcs .spd_ok
-        lda #1
-.spd_ok:
-        sta mr_tick,x
-        inc mr_y,x
-
-        ; draw trail head..head-len+1
-        lda mr_y,x
-        sta ET0                 ; head_y
-        lda #0
-        sta ET1                 ; k
-.trail:
-        lda ET0
-        sec
-        sbc ET1
-        bcc .skip               ; row < 0
-        cmp #24
-        bcs .skip               ; row 24 remains outside the effect field
-        tay                     ; row
-        jsr mr_setptr           ; SPTR/CPTR for (row=Y, col=X)
-        jsr RandGlyph
-        ldy #0
-        sta (SPTR),y
-        ; colour by k: 0=head white, 1=mid lgreen, else green
-        lda ET1
-        bne .mid
-        lda #COL_HEAD
-        jmp .putc
-.mid:   cmp #1
-        bne .grn
-        lda #COL_LGREEN
-        jmp .putc
-.grn:   lda #COL_GREEN
-.putc:  ldy #0
-        sta (CPTR),y
-.skip:
-        inc ET1
-        lda ET1
-        cmp mr_len,x
-        bcc .trail
-
-        ; erase the tail cell at row = head_y - len
-        lda mr_y,x
-        sec
-        sbc mr_len,x
-        bcc .resp_chk
-        cmp #24
-        bcs .resp_chk
-        tay
-        jsr mr_setptr
-        ldy #0
-        lda #$20
-        sta (SPTR),y
-        lda #$00
-        sta (CPTR),y
-.resp_chk:
-        lda mr_y,x
-        cmp #(25+8)
-        bcc .next
-        ; respawn above the top
-        jsr Rand8
-        and #$1f
-        eor #$1f
-        clc
-        adc #$e0
-        sta mr_y,x
-        jsr Rand8
-        and #3
-        clc
-        adc #1
-        sta mr_speed,x
-        sta mr_tick,x
-        jsr Rand8
-        and #7
-        clc
-        adc #3
-        sta mr_len,x
-.next:
-        inx
-        cpx #MR_COLS
-        bcs .done
-        jmp .col
-.done:
-        rts
-
-; SPTR/CPTR for cell (row in Y, col in X); preserves X
-mr_setptr:
-        lda ScrRowLo,y
-        sta SPTR
-        lda ScrRowHi,y
-        sta SPTR_HI
-        txa
-        clc
-        adc SPTR
-        sta SPTR
-        bcc .nc
-        inc SPTR_HI
-.nc:    lda SPTR
-        sta CPTR
-        lda SPTR_HI
-        clc
-        adc #>SCR_COL_OFF
-        sta CPTR_HI
-        rts
-!zone
-
-; ============================================================================
-;  PART 2 : HORIZON WARP (rings)
-; ============================================================================
-
-; ============================================================================
-;  PART 3 : SINE STARFIELD
+;  STARFIELD
 ; ============================================================================
 !zone stars
 NUM_FAST = 40
@@ -2871,120 +2708,12 @@ PortedInit:
         sta enginePhase
         rts
 
-; icy depth gradient (dark -> cyan -> white -> dark) so the wireframe reads as 3D
-WireColors:      !byte $0b,$06,$0e,$03,$0d,$01,$0f,$0f,$01,$0d,$03,$0e,$06,$0b,$0c,$0c
 SolarChars:      !byte $20,$2e,$2b,$2a,$e1,$e2,$e3,$e4,$e5,$e4,$e3,$e2,$e1,$2a,$2b,$2e
 SolarColors:     !byte $00,$09,$08,$02,$0a,$07,$01,$07,$0a,$02,$08,$09,$0b,$0c,$0f,$0c
 PrismGateChars:  !byte $20,$2e,$2b,$2a,$e0,$e1,$e2,$e3,$e4,$e5,$e3,$e2,$e1,$e0,$2a,$2b
 PrismGateColors: !byte $06,$0e,$03,$0d,$01,$07,$0f,$07,$01,$0d,$03,$0e,$06,$0b,$0c,$0b
 TwistChars:      !byte $2f,$5c,$2d,$2b,$e0,$e1,$e2,$e3
 TwistColors:     !byte $00,$09,$08,$0a,$07,$01,$07,$0a,$08,$09,$08,$0a,$07,$01,$0a,$08
-WireCubeChars:   !binary "wire_cube_chars.bin"
-WireCubeMask:    !binary "wire_cube_mask.bin"
-WireCubeCharLo: !for r,0,95 { !byte <(WireCubeChars + r*40) }
-WireCubeCharHi: !for r,0,95 { !byte >(WireCubeChars + r*40) }
-WireCubeMaskLo: !for r,0,95 { !byte <(WireCubeMask + r*40) }
-WireCubeMaskHi: !for r,0,95 { !byte >(WireCubeMask + r*40) }
-CubeFrameBase:   !byte 0,24,48,72
-
-
-!zone full3dcube
-WireframeGridRender:
-        ; Fully 3D table-driven rotating wireframe cube.  The row atlas is indexed
-        ; with true modulo-24, so every projected slice is used.
-        sta engineMode
-        lda zoomPulse           ; livelier beat-synced spin
-        lsr
-        clc
-        adc #2
-        adc enginePhase
-        sta enginePhase
-        lda #0
-        sta engineRow
-.wf_row:
-        ldx engineRow
-        cpx #EFFECT_ROW_COUNT
-        bcc .wf_go
-        jmp .wf_done
-.wf_go:
-        lda ScrRowLo,x
-        sta SPTR
-        lda ScrRowHi,x
-        sta SPTR_HI
-        lda ColRowLo,x
-        sta CPTR
-        lda ColRowHi,x
-        sta CPTR_HI
-        lda enginePhase
-        lsr
-        lsr
-        lsr
-        and #$03
-        tax
-        lda CubeFrameBase,x
-        clc
-        adc engineRow
-        tax
-        lda WireCubeCharLo,x
-        sta ET0
-        lda WireCubeCharHi,x
-        sta ET1
-        lda WireCubeMaskLo,x
-        sta TXTP
-        lda WireCubeMaskHi,x
-        sta TXTP_HI
-        lda beatSin             ; sine sway (smooth pendulum) instead of linear drift -> reads 3D
-        lsr
-        lsr
-        lsr
-        lsr
-        lsr
-        and #$07
-        sta ET2
-        ldy #39
-.wf_cell:
-        sty engineCol
-        tya
-        clc
-        adc ET2
-        cmp #40
-        bcc .wf_samp
-        sec
-        sbc #40
-.wf_samp:
-        tay
-        lda (TXTP),y
-        sta ET3
-        lda (ET0),y
-        ldy engineCol
-        ldx ET3
-        beq .wf_blank
-        sta (SPTR),y
-        txa
-        clc
-        adc enginePhase
-        adc musicPulse
-        and #$0f
-        tax
-        lda WireColors,x
-        sta (CPTR),y
-        jmp .wf_next
-.wf_blank:
-        lda #$20
-        sta (SPTR),y
-        lda #$00
-        sta (CPTR),y
-.wf_next:
-        ldy engineCol
-        dey
-        bpl .wf_cell
-        inc engineRow
-        jmp .wf_row
-.wf_done:
-        rts
-
-!zone
-
 !zone solarflare
 SolarFlareRender:
         sta engineMode
@@ -3162,16 +2891,6 @@ SeedRand:
         ora #$01
         sta rand8_s
         rts
-
-RandGlyph:
-        jsr Rand8
-        and #$3f
-        clc
-        adc #$40
-        cmp #$60
-        bcs @ok
-        adc #$20
-@ok:    rts
 
 ; bounded mods used by the starfield
 Mod40:
