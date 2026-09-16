@@ -40,6 +40,8 @@ The source-level music review is retained in
 arrangement notes are in [`V6_0_0_NOTES.md`](V6_0_0_NOTES.md). See
 [`AUDIT.md`](AUDIT.md) for the repository cleanup and verification record, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the effect and function map.
+Release-specific setup and contents are documented in
+[`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
 ## Verification
 
