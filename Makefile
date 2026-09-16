@@ -8,7 +8,8 @@ CHECKSUMS := CHECKSUMS.sha256
 RELEASE_ARCHIVE := dist/berlin-trip-subway-3sid-v$(VERSION).zip
 RELEASE_FILES := $(PROGRAM) README.md RELEASE_NOTES.md AUDIT.md CHECKSUMS.sha256 \
 	V6_0_0_MUSIC_AUDIT.json V6_0_0_NOTES.md build_release.sh Makefile \
-	docs/ARCHITECTURE.md docs/EFFECTS.md $(SOURCE)
+	docs/ARCHITECTURE.md docs/EFFECTS.md assets/3sid-pulse-field-magenta.png \
+	assets/3sid-pulse-field-blue.png $(SOURCE)
 VICE_3SID_FLAGS := -sidextra 2 -sid2address 0xd420 -sid3address 0xd440
 
 .PHONY: all build run check checksums release clean
@@ -28,7 +29,7 @@ check: build
 	@shasum -a 256 -c $(CHECKSUMS)
 
 checksums:
-	@shasum -a 256 AUDIT.md README.md RELEASE_NOTES.md V6_0_0_MUSIC_AUDIT.json V6_0_0_NOTES.md build_release.sh Makefile docs/ARCHITECTURE.md docs/EFFECTS.md $(SOURCE) > $(CHECKSUMS)
+	@shasum -a 256 AUDIT.md README.md RELEASE_NOTES.md V6_0_0_MUSIC_AUDIT.json V6_0_0_NOTES.md build_release.sh Makefile docs/ARCHITECTURE.md docs/EFFECTS.md assets/3sid-pulse-field-magenta.png assets/3sid-pulse-field-blue.png $(SOURCE) > $(CHECKSUMS)
 
 release: check
 	@mkdir -p dist

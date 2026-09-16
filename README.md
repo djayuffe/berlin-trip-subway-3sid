@@ -36,6 +36,20 @@ version in their filename.
 - Berlin A and Berlin B are 64-row patterns. At seven PAL frames per row and
   four rows per beat, the tempo is approximately 107 BPM.
 
+## Effect previews
+
+These are two VICE captures of the opening **3SID pulse field** at different
+music-driven palette phases. They are cropped to the C64 viewport; no desktop
+or emulator controls are included.
+
+| Magenta pulse phase | Blue pulse phase |
+| --- | --- |
+| ![Magenta phase of the 3SID pulse field](assets/3sid-pulse-field-magenta.png) | ![Blue phase of the 3SID pulse field](assets/3sid-pulse-field-blue.png) |
+
+The effect fills the text screen with `SafeTunnelChars` and derives its colour
+index from the frame counter plus the three SID pulse values. This makes the
+geometry stable enough to read while the palette responds to the soundtrack.
+
 The source-level music review is retained in
 [`V6_0_0_MUSIC_AUDIT.json`](V6_0_0_MUSIC_AUDIT.json), and the accompanying
 arrangement notes are in [`V6_0_0_NOTES.md`](V6_0_0_NOTES.md). See
