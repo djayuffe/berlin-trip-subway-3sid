@@ -38,6 +38,15 @@ version in their filename.
 
 ## Effect previews
 
+### Verified boot-path capture
+
+This frame was captured after the BASIC loader executed `SYS 2061`, passed
+through the fixed `$080d` boot jump, and reached `MegaMain` initialization.
+
+![Running effect reached through the verified boot path](assets/boot-path-effect.png)
+
+### Pulse-field palette phases
+
 These are two VICE captures of the opening **3SID pulse field** at different
 music-driven palette phases. They are cropped to the C64 viewport; no desktop
 or emulator controls are included.
