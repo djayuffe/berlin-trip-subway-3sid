@@ -1,24 +1,18 @@
 ; ============================================================================
-;  U83R RUL3Z - 3SID TIMING-LOCKED MEGADEMO   (C64 / ACME)
+;  BERLIN TRIP SUBWAY - 3SID C64 DEMO   (C64 / ACME)
 ; ----------------------------------------------------------------------------
-;  Full sequenced production with 3SID audio: bass, melody and dedicated drums
-;  score and wipe + title-card transitions:
-;     PART 0  TITLE          - title screen with colour-cycling text
-;     PART 1  DIGITAL RAIN    - Matrix-style falling glyph columns
-;     PART 2  HORIZON WARP    - concentric colour-cycling rainbow rings
-;     PART 3  SINE STARFIELD  - parallax char starfield + glowing greets scroller
-;
-;  Sources integrated (re-implemented under one framework):
-;     matrix_rain_fixed_v2.s, horizonwarp_rings_baremetal.s,
-;     U83R demo.s (starfield + ticker), cracktro_strict_v7 (3SID-expanded engine)
+;  A 28-part, text-mode demo with a timing-locked 3SID soundtrack:
+;     SID1 $d400  bass / sub / ghost voice
+;     SID2 $d420  arpeggio / harmony / shimmer
+;     SID3 $d440  kick / snare / hat drums
 ;
 ;  Unified layout: VIC bank 0, screen $0400, colour $d800, charset = ROM font
 ;  mirrored at $1000 (no copy needed), text mode.  A single raster IRQ at line
 ;  250 ticks the music at 50 Hz and raises a frame flag; the main loop renders
 ;  the active part and drives the part/transition state machine.
 ;
-;  Build:  acme -f cbm -o build/megademo.prg src/megademo.s
-;  Run:    LOAD"*",8,1 : SYS 2061     (or autostart)
+;  Build:  make build
+;  Run:    make run
 ; ============================================================================
 
 !cpu 6502
@@ -52,7 +46,6 @@ VIC_BANKDDR = $dd02
 CIA1_ICR    = $dc0d
 CIA2_ICR    = $dc0d+$0100           ; $dd0d
 CIA1_TALO   = $dc04
-JiffyFPS    = $02a6
 KERNAL_IRQ  = $ea31                 ; KERNAL IRQ continuation (keyboard/jiffy)
 
 ; --- 3SID TunnelVoyager engine ---
@@ -90,7 +83,7 @@ SID_FCHI   = SID1+$16
 SID_RESFLT = SID1+$17
 SID_MODEVOL= SID1+$18
 
-; SID2 melodic chip (legacy V2 names map to SID2 voice 1)
+; SID2 melodic chip (V2 aliases map to its first voice)
 SID_V2FLO  = SID2+$00
 SID_V2FHI  = SID2+$01
 SID_V2PWLO = SID2+$02
@@ -117,7 +110,7 @@ SID2_FCHI  = SID2+$16
 SID2_RESFLT= SID2+$17
 SID2_MODEVOL=SID2+$18
 
-; SID3 dedicated drums. Legacy V3 is the kick voice.
+; SID3 dedicated drums. V3 aliases address the kick voice.
 SID_V3FLO  = SID3+$00
 SID_V3FHI  = SID3+$01
 SID_V3CTL  = SID3+$04
@@ -331,166 +324,6 @@ FinalClearColor3:
         rts
 
 ; ============================================================================
-;  LEGACY SCROLLER DATA (runtime disabled in final clean build)
-;  Smooth: $d016 fine scroll via scrollReg + full row redraw each frame (so it
-;  survives screen clears between parts).  Glow colour overlay scrolls under it.
-; ============================================================================
-SCR_HOLD    = 150               ; frames to freeze on a greet "stop"
-SCR_SENTCOL = 16                ; column at which a $ff sentinel fires a stop
-SCR_CORE    = ScrollMsgEnd - ScrollMsg - 40   ; 16-bit core length
-gscWinLo !byte 0                ; visible window char offset (16-bit)
-gscWinHi !byte 0
-gscFine  !byte 7                ; $d016 fine X (7..0)
-gscGlow  !byte 0                ; glow colour phase
-scrSpeed !byte 2                ; pixels/frame (1..6, +/- keys)
-scrPause !byte 0                ; 1 = paused by SPACE
-scrHold  !byte 0                ; >0 = auto greet-stop countdown
-scrLastLo !byte $ff             ; last window that fired a stop (debounce)
-scrLastHi !byte $ff
-
-GlobalScrollerInit:
-        lda #0
-        sta gscWinLo
-        sta gscWinHi
-        sta gscGlow
-        sta scrPause
-        sta scrHold
-        lda #2
-        sta scrSpeed
-        lda #7
-        sta gscFine
-        lda #$ff
-        sta scrLastLo
-        sta scrLastHi
-        rts
-
-; ReadKeys: SPACE = pause toggle, '+' faster, '-' slower (GETIN $ffe4)
-ReadKeys:
-        jsr $ffe4
-        beq @rkdone
-        cmp #$20                ; SPACE -> toggle pause
-        bne @chkplus
-        lda scrPause
-        eor #$01
-        sta scrPause
-        rts
-@chkplus:
-        cmp #$2b                ; '+' -> faster (cap 6)
-        bne @chkminus
-        lda scrSpeed
-        cmp #6
-        bcs @rkdone
-        inc scrSpeed
-        rts
-@chkminus:
-        cmp #$2d                ; '-' -> slower (min 1)
-        bne @rkdone
-        lda scrSpeed
-        cmp #2
-        bcc @rkdone
-        dec scrSpeed
-@rkdone:
-        rts
-
-GlobalScroller:
-        ; v6.0 Berlin composition clean mode: no scroller.
-        rts
-
-GlobalScrollerLegacy:
-        inc gscGlow             ; glow keeps shimmering even when paused/held
-        ; -- frozen during a greet stop --
-        lda scrHold
-        beq @noHold
-        dec scrHold
-        jmp @draw
-@noHold:
-        lda scrPause            ; user pause -> freeze (still redraw for glow)
-        bne @draw
-        ; -- greet sentinel ($ff) reaching the centre column fires a stop --
-        clc
-        lda #<ScrollMsg
-        adc gscWinLo
-        sta TXTP
-        lda #>ScrollMsg
-        adc gscWinHi
-        sta TXTP_HI
-        ldy #SCR_SENTCOL
-        lda (TXTP),y
-        cmp #$ff
-        bne @advance
-        lda gscWinLo            ; debounce: only fire once per window
-        cmp scrLastLo
-        bne @fire
-        lda gscWinHi
-        cmp scrLastHi
-        beq @advance
-@fire:
-        lda gscWinLo
-        sta scrLastLo
-        lda gscWinHi
-        sta scrLastHi
-        lda #SCR_HOLD
-        sta scrHold
-        jmp @draw
-@advance:
-        lda gscFine
-        sec
-        sbc scrSpeed
-        bcs @savefine
-        clc
-        adc #8                  ; wrapped -> advance one character
-        sta gscFine
-        inc gscWinLo            ; gscWin++ (16-bit)
-        bne @wchk
-        inc gscWinHi
-@wchk:
-        lda gscWinHi            ; if gscWin >= core length -> wrap to 0
-        cmp #>SCR_CORE
-        bcc @draw
-        bne @wrap
-        lda gscWinLo
-        cmp #<SCR_CORE
-        bcc @draw
-@wrap:
-        lda #0
-        sta gscWinLo
-        sta gscWinHi
-        lda #$ff
-        sta scrLastLo
-        sta scrLastHi
-        jmp @draw
-@savefine:
-        sta gscFine
-@draw:
-        lda gscFine
-        ora #$08
-        sta scrollReg           ; the IRQ split writes this to $d016 for row 24
-        clc
-        lda #<ScrollMsg
-        adc gscWinLo
-        sta TXTP
-        lda #>ScrollMsg
-        adc gscWinHi
-        sta TXTP_HI
-        ldy #39
-@d:     lda (TXTP),y
-        cmp #$ff                ; sentinel -> render as a blank
-        bne @notsent
-        lda #$20
-@notsent:
-        sta SCREEN+24*40,y
-        tya
-        clc
-        adc gscGlow
-        and #$1f
-        tax
-        lda GlowRamp,x
-        sta COLOR+24*40,y
-        dey
-        bpl @d
-        rts
-
-; ============================================================================
 ;  Shared 3SID visual polish: subtle colour-only response over every effect.
 ;  SID1 bass -> top rail, SID2 melodic -> lower rail, SID3 drums -> side accents.
 ; ============================================================================
@@ -572,7 +405,6 @@ ThreeSIDDrumPal: !byte $00,$00,$06,$0e,$03,$0d,$07,$01,$0f,$01,$07,$03,$0e,$06,$
 ; ============================================================================
 ;  IRQ : 50 Hz music tick + frame flag, chained to KERNAL
 ; ============================================================================
-SPLIT_LINE = 241        ; legacy split line (unused in final build)
 MAIN_LINE  = 250        ; stable single IRQ below display
 
 InstallIRQ:
@@ -604,7 +436,7 @@ MegaMain_IRQ:
                                 ; current beat even if a heavy render spans frames
         lda #$01
         sta frameReady
-        ; v6.0 Berlin composition: single stable IRQ, no scroller/raster split.
+        ; Single stable IRQ: no display split is required.
         lda #MAIN_LINE
         sta VIC_RASTER
         lda #<MegaMain_IRQ
@@ -613,37 +445,14 @@ MegaMain_IRQ:
         sta $0315
         jmp KERNAL_IRQ          ; chain (keyboard/jiffy)
 
-; ---- SPLIT stop @ line 241: apply the IRQ smooth-scroller fine offset ----
-MegaSplit_IRQ:
-        lda #$01
-        sta VIC_IRR
-        lda scrollReg           ; $08|fine  ($08 = no scroll outside part 3)
-        sta VIC_CTRL2
-        lda #MAIN_LINE
-        sta VIC_RASTER
-        lda #<MegaMain_IRQ
-        sta $0314
-        lda #>MegaMain_IRQ
-        sta $0315
-        jmp $ea81               ; tight return (restore regs + rti)
-
 ; ============================================================================
 ;  Part / transition state machine
 ; ============================================================================
 ; demoState: 0 = RUN, 1 = TRANSITION
-; transPhase: 0 = wipe to black, 1 = show title card
 partId          !byte 0
 nextPart        !byte 0
 demoState       !byte 0
-transPhase      !byte 0
-transStyle      !byte 0         ; 0 = row wipe, 1 = colour flash-fade
-wipeRow         !byte 0
 cardTimer       !byte 0
-; flash-fade transition colour ramp (white -> hues -> black)
-FlashFadeRamp:  !byte $01,$01,$0f,$07,$0a,$04,$0e,$06,$00,$00
-FLASHFADE_LEN = 10
-partFramesLo    !byte 0
-partFramesHi    !byte 0
 partExpirePending !byte 0 ; effect waits for row-12 fade point
 partBarsLeft    !byte 0   ; musical bars remaining before fade
 partSkipStartEdge !byte 0 ; startup begins before the first row-0 IRQ
@@ -651,13 +460,10 @@ mainRowEdge     !byte 0   ; atomic snapshot consumed by the renderer
 mainBeatEdge    !byte 0   ; sticky beat snapshot; cannot be lost by heavy effects
 frameReady      !byte 0
 frameCounter    !byte 0
-scrollReg       !byte $08       ; $d016 value applied at the split (fine scroll)
 partBorder      !byte 0         ; per-part border base colour
 
 NUM_PARTS = 28
-; Per-part border tint (21 parts; horizon-warp/rings removed)
-;             title matrix plasma hyper vortex xor waves tunnel fire star wf hp lw dt CUBE nr STAR hr pg tz of
-;             ti mat pl hy vx xr wv tn fi st | ts hv mc rb yw tb gh mb rg cg sp bo rc  (23)
+; Per-part border tint.
 PartBorderTbl:  !byte $06, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $0b, $00, $06
 ; Per-scene background tint (mostly black; deep/tunnel scenes get a dark-blue void)
 ;            ti mat pl hy vx xr wv tn fi st wf hp lw DT CB nr ST hr pg TZ of
@@ -665,22 +471,10 @@ PartBorderTbl:  !byte $06, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 ; all scenes on pure black for max contrast / clean 3D
 PartBgTbl:  !byte $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00, $00
 
-; Per-part run length in frames (low,high).  CUBE (idx 14) lingers; rest snappy.
-;                title matrix plasma hyper vortex  xor   waves  tunnel fire  star  wf    hp    lw    dt   CUBE   nr   STAR   hr    pg    tz    of
-;                ti  mat  pl   hy   vx   xr   wv   tn   fi   st | ts   hv   mc   rb   yw   tb   gh   mb   rg   cg   sp   bo   rc
-PartFramesTbl_Lo  !byte <270,<300,<290,<280,<295,<310,<290,<305,<290,<315,<300,<305,<310,<300,<340,<305,<310,<350,<295,<295,<295,<315,<310,<390,<325,<315,<315,<360
-PartFramesTbl_Hi  !byte >270,>300,>290,>280,>295,>310,>290,>305,>290,>315,>300,>305,>310,>300,>340,>305,>310,>350,>295,>295,>295,>315,>310,>390,>325,>315,>315,>360
-
 SetPartTimer:
-        ldx partId
-        ; Legacy frame values are retained for tooling/compatibility only.
-        lda PartFramesTbl_Lo,x
-        sta partFramesLo
-        lda PartFramesTbl_Hi,x
-        sta partFramesHi
-
         ; Desired scene length includes the bar in which the scene starts.
         ; Store N-1 because the scene is initialized on row 0.
+        ldx partId
         lda PartBarsTbl,x
         sec
         sbc #1
@@ -709,9 +503,6 @@ PartBarsTbl:
 BeginTransition:
         lda #1
         sta demoState
-        lda #0
-        sta transPhase
-        sta wipeRow
         sta BORDER
         sta BKG
         lda partId
@@ -728,9 +519,6 @@ FinalNextPartOk:
         rts
 
 StepTransition:
-        jmp TransCard
-
-StepFlashFade:
         jmp TransCard
 
 TransCard:
@@ -789,8 +577,6 @@ InitPart:
         sta partBorder
         lda PartBgTbl,x          ; per-scene background tint (scenery)
         sta BKG
-        lda #$08
-        sta scrollReg           ; scroller split inert until the finale sets it
         ; (music: 3SID bass/melodic/drum split runs continuously)
         lda partId
         asl
@@ -822,13 +608,8 @@ UpdateTbl:
         !word vx_update, mb_update, rb_update, nw_update
 
 ; ============================================================================
-;  Title cards (shown during transitions) + title part text
+;  Screen-text helpers used by the labelled effects
 ; ============================================================================
-; Card name/subtitle for the *next* part (table-driven, auto-centred).
-ShowCard:
-        ; v6.0 Berlin composition clean mode: no cards or visible text.
-        rts
-
 ; PrintCenteredAuto: TXTP -> $ff-term text, X=row -> measures length, centres
 PrintCenteredAuto:
         ldy #0
@@ -840,24 +621,6 @@ PrintCenteredAuto:
 @d:     jmp PrintCentered       ; X=row, Y=length
 
 ; Re-colour the two card rows (10 and 13) with a cycling hue.
-CycleCardColor:
-        lda frameCounter
-        lsr
-        lsr
-        clc
-        adc #$01
-        and #$0f
-        bne @ok
-        lda #$01
-@ok:    sta ET0
-        ldx #39
-@l:     lda ET0
-        sta COLOR+10*40,x
-        sta COLOR+13*40,x
-        dex
-        bpl @l
-        rts
-
 ; PrintCentered: TXTP -> text ($ff term), X=row, Y=length -> centred on row X
 PrintCentered:
         ; col = (40 - len) / 2
@@ -1019,7 +782,7 @@ mr_update:
         sbc ET1
         bcc .skip               ; row < 0
         cmp #24
-        bcs .skip               ; row >= 24 (row 24 reserved for scroller)
+        bcs .skip               ; row 24 remains outside the effect field
         tay                     ; row
         jsr mr_setptr           ; SPTR/CPTR for (row=Y, col=X)
         jsr RandGlyph
@@ -1113,7 +876,7 @@ mr_setptr:
 ; ============================================================================
 
 ; ============================================================================
-;  PART 3 : SINE STARFIELD + glowing greets scroller
+;  PART 3 : SINE STARFIELD
 ; ============================================================================
 !zone stars
 NUM_FAST = 40
@@ -1239,7 +1002,7 @@ ss_update:
         bcs .slowdone
         jmp .sl
 .slowdone:
-        rts                     ; row 24 scroller is handled by GlobalScroller
+        rts                     ; row 24 is intentionally left available
 
 ; ss_ptr: A=col, Y=row -> SPTR/CPTR ; stashes col in ss_fx_cur
 ss_ptr:
@@ -2232,7 +1995,7 @@ rb_update:
 ;  ACTIVE PART 4 : YAW WOBBLE TUNNEL / no-SMC yaw+column wobble variant
 ; ----------------------------------------------------------------------------
 ;  Further source-kilde integration from tunnel_engine_no_smc_fixed.s: auto-yaw,
-;  column wobble and per-cell tint, adapted to the shared MegaDemo text engine.
+;  column wobble and per-cell tint in the shared text-mode engine.
 ; ============================================================================
 !zone yawwobbletunnel
 yw_phase !byte 0
@@ -3575,18 +3338,6 @@ curSong  !byte 0
 ; --- per-scene music variety: transpose (semitones) + tempo (frames/row) ---
 musTranspose !byte 0
 musSpeed     !byte MUS_SPEED
-;                 title mat rng pls hyp vor xor wav tun star
-MusXposeTbl: !byte 0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 ; safe 28-part compatibility
-MusSpeedTbl: !byte 7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7,7 ; safe 28-part compatibility
-
-; SetMusicScene: pick transpose for the current partId (A=partId).
-; (tempo + song style are chosen by SelectStyle.)
-SetMusicScene:
-        tax
-        lda MusXposeTbl,x
-        sta musTranspose
-        rts
-
 ; SelectStyle: switch the whole song + instrument + tempo + filter (A=style 0..3)
 ; Patches the engine's read operands to the chosen song's pattern tables.
 SelectStyle:
@@ -5329,24 +5080,6 @@ Sin256:
         !byte $05,$05,$05,$05,$06,$06,$06,$07,$07,$07,$08,$08,$08,$09,$09,$09
         !byte $0a,$0a,$0a,$0b,$0b,$0b,$0c,$0c,$0c,$0d,$0d,$0e,$0e,$0e,$0f,$0f
 
-; Sparkle/cycle palette (1..15)
-ColorCycle:
-        !byte $08,$08,$08,$09,$09,$09,$0a,$0a,$0a,$0b,$0b,$0b,$0c,$0c,$0c,$0d
-        !byte $0d,$0d,$0e,$0e,$0e,$0f,$0f,$0f,$0e,$0e,$0e,$0d,$0d,$0d,$0c,$0c
-        !byte $0c,$0b,$0b,$0b,$0a,$0a,$0a,$09,$09,$09,$08,$08,$08,$07,$07,$07
-        !byte $06,$06,$06,$05,$05,$05,$04,$04,$04,$03,$03,$03,$02,$02,$02,$01
-        !byte $01,$01,$02,$02,$02,$03,$03,$03,$04,$04,$04,$05,$05,$05,$06,$06
-        !byte $06,$07,$07,$07,$08,$08,$08,$09,$09,$09,$0a,$0a,$0a,$0b,$0b,$0b
-        !byte $0c,$0c,$0c,$0d,$0d,$0d,$0e,$0e,$0e,$0f,$0f,$0f,$0e,$0e,$0e,$0d
-        !byte $0d,$0d,$0c,$0c,$0c,$0b,$0b,$0b,$0a,$0a,$0a,$09,$09,$09,$08,$08
-
-; Scroller glow ramp (32, loops) - light blue -> white -> light blue
-GlowRamp:
-        !byte $0e,$0e,$0e,$03,$03,$0d,$0d,$01
-        !byte $01,$01,$0f,$0f,$0f,$0f,$0f,$0f
-        !byte $0f,$0f,$0f,$0f,$01,$01,$01,$0d
-        !byte $0d,$03,$03,$0e,$0e,$0e,$0e,$0e
-
 ;  >>> imported-effect data tables <<<
 ; Extra effect tables
 HeartWidth:  !byte 0,1,3,6,10,14,17,19,20,20,19,18,17,15,13,10,8,6,4,3,2,1,0,0,0
@@ -5410,104 +5143,13 @@ BridgeChars:
         !byte $20,$2e,$2b,$2a,$e2,$e3,$e4,$e5
 BridgeColors:
         !byte $00,$06,$0b,$0c,$0f,$01,$07,$0d,$03,$0e,$06,$0b,$0c,$0f,$01,$07
-EndtroGreetingRow:
-        !byte $13,$14,$0f,$10,$20,$14,$0f,$20,$07,$12,$05,$05,$14,$20,$13,$14,$09,$01,$0e,$20,$12,$15,$0e,$01,$12,$20,$13,$16,$05,$09,$0e,$20,$0d,$01,$07,$0e,$15,$13,$20,$08
-
 RotorCubeChars:
         !byte $2d,$5c,$2f,$2b,$e2,$e3,$e4,$e5
 RotorCubeColors:
         !byte $06,$0e,$03,$0d,$01,$07,$0f,$07,$01,$0d,$03,$0e,$06,$0b,$0c,$0b
 
-; Title background pulse (8 dark steps; keeps title text readable)
-TitleBgPulse:
-        !byte $00,$00,$06,$06,$0b,$06,$06,$00
-
 ; ============================================================================
-;  Text  (screen codes via !scr, $ff-terminated)
-; ============================================================================
-; NOTE: ACME !scr maps lowercase a-z -> screen codes $01-$1a (the letter
-; glyphs in the uppercase ROM font).  Uppercase a-z would map to $41-$5a =
-; graphics, so all on-screen text is written here in lowercase.
-TitleA: !scr " " : !byte $ff
-TitleB: !scr " " : !byte $ff
-TitleC: !scr " " : !byte $ff
-TitleD: !scr " " : !byte $ff
-
-; Per-part title cards (indexed by nextPart)
-CardName0: !scr " " : !byte $ff
-CardSub0: !scr " " : !byte $ff
-CardName1: !scr " " : !byte $ff
-CardSub1: !scr " " : !byte $ff
-CardName2: !scr " " : !byte $ff
-CardSub2: !scr " " : !byte $ff
-CardName3: !scr " " : !byte $ff
-CardSub3: !scr " " : !byte $ff
-CardName4: !scr " " : !byte $ff
-CardSub4: !scr " " : !byte $ff
-CardName5: !scr " " : !byte $ff
-CardSub5: !scr " " : !byte $ff
-CardName6: !scr " " : !byte $ff
-CardSub6: !scr " " : !byte $ff
-CardName7: !scr " " : !byte $ff
-CardSub7: !scr " " : !byte $ff
-CardName8: !scr " " : !byte $ff
-CardSub8: !scr " " : !byte $ff
-CardName9: !scr " " : !byte $ff
-CardSub9: !scr " " : !byte $ff
-CardName10: !scr " " : !byte $ff
-CardSub10: !scr " " : !byte $ff
-CardName11: !scr " " : !byte $ff
-CardSub11: !scr " " : !byte $ff
-CardName12: !scr " " : !byte $ff
-CardSub12: !scr " " : !byte $ff
-CardName13: !scr " " : !byte $ff
-CardSub13: !scr " " : !byte $ff
-CardName14: !scr " " : !byte $ff
-CardSub14: !scr " " : !byte $ff
-CardName15: !scr " " : !byte $ff
-CardSub15: !scr " " : !byte $ff
-CardName16: !scr " " : !byte $ff
-CardSub16: !scr " " : !byte $ff
-CardName17: !scr " " : !byte $ff
-CardSub17: !scr " " : !byte $ff
-CardName18: !scr " " : !byte $ff
-CardSub18: !scr " " : !byte $ff
-CardName19: !scr " " : !byte $ff
-CardSub19: !scr " " : !byte $ff
-CardName20: !scr " " : !byte $ff
-CardSub20: !scr " " : !byte $ff
-CardName21: !scr " " : !byte $ff
-CardSub21: !scr " " : !byte $ff
-CardName22: !scr " " : !byte $ff
-CardSub22: !scr " " : !byte $ff
-CardName23: !scr " " : !byte $ff
-CardSub23: !scr " " : !byte $ff
-CardName24: !scr " " : !byte $ff
-CardSub24: !scr " " : !byte $ff
-CardName25: !scr " " : !byte $ff
-CardSub25: !scr " " : !byte $ff
-CardName26: !scr " " : !byte $ff
-CardSub26: !scr " " : !byte $ff
-CardName27: !scr " " : !byte $ff
-CardSub27: !scr " " : !byte $ff
-CardNameLo: !byte <CardName0, <CardName1, <CardName2, <CardName3, <CardName4, <CardName5, <CardName6, <CardName7, <CardName8, <CardName9, <CardName10, <CardName11, <CardName12, <CardName13, <CardName14, <CardName15, <CardName16, <CardName17, <CardName18, <CardName19, <CardName20, <CardName21, <CardName22, <CardName23, <CardName24, <CardName25, <CardName26, <CardName27
-CardNameHi: !byte >CardName0, >CardName1, >CardName2, >CardName3, >CardName4, >CardName5, >CardName6, >CardName7, >CardName8, >CardName9, >CardName10, >CardName11, >CardName12, >CardName13, >CardName14, >CardName15, >CardName16, >CardName17, >CardName18, >CardName19, >CardName20, >CardName21, >CardName22, >CardName23, >CardName24, >CardName25, >CardName26, >CardName27
-CardSubLo: !byte <CardSub0, <CardSub1, <CardSub2, <CardSub3, <CardSub4, <CardSub5, <CardSub6, <CardSub7, <CardSub8, <CardSub9, <CardSub10, <CardSub11, <CardSub12, <CardSub13, <CardSub14, <CardSub15, <CardSub16, <CardSub17, <CardSub18, <CardSub19, <CardSub20, <CardSub21, <CardSub22, <CardSub23, <CardSub24, <CardSub25, <CardSub26, <CardSub27
-CardSubHi: !byte >CardSub0, >CardSub1, >CardSub2, >CardSub3, >CardSub4, >CardSub5, >CardSub6, >CardSub7, >CardSub8, >CardSub9, >CardSub10, >CardSub11, >CardSub12, >CardSub13, >CardSub14, >CardSub15, >CardSub16, >CardSub17, >CardSub18, >CardSub19, >CardSub20, >CardSub21, >CardSub22, >CardSub23, >CardSub24, >CardSub25, >CardSub26, >CardSub27
-
-ScrollMsg:
-!scr "                                        "
-!scr "                                        "
-ScrollMsgEnd:
-ScrollCore = ScrollMsgEnd - ScrollMsg - 40   ; (16-bit now; no 255 cap)
-
-; ============================================================================
-;  size guard
-; ============================================================================
-
-; ============================================================================
-;  NEW EFFECTS (gold cube zip) - placed at end so the page-sensitive effect
-;  code region is never shifted by a large amount.
+;  Additional effect implementations
 ; ============================================================================
 NfxCoolPalette:      !byte $06,$0e,$03,$0d,$01,$07,$0f,$07,$01,$0d,$03,$0e,$06,$0b,$0c,$0b
 NfxWireRows:         !byte 5,6,7,8,10,12,14,16,18,19,20,21
@@ -5521,12 +5163,9 @@ NfxColWarp:          !byte 0,1,1,2,2,3,4,5,6,7,8,9,10,11,12,11,10,9,8,7,6,5,4,3,
 NfxGoldBorder:       !byte $08,$09,$07,$0f,$01,$0f,$07,$08
 NfxGoldDimPalette: !byte $09,$08,$0a,$0f
 NfxGoldPalette:      !byte $09,$08,$07,$0f,$01,$0f,$07,$08,$09,$08,$07,$0f,$01,$0f,$07,$08
-NfxGoldWallChars:    !byte $2f,$5c,$2d,$3d,$2b,$2a,$2f,$5c
 NfxTrenchLeft:       !byte 1,2,3,4,5,6,7,8,9,10,11,12,12,11,10,9,8,7,6,5,4,3,2,1
 NfxTrenchRight:      !byte 38,37,36,35,34,33,32,31,30,29,28,27,27,28,29,30,31,32,33,34,35,36,37,38
 NfxCubePalette:      !byte $06,$0e,$03,$0d,$01,$07,$0f,$07,$01,$0d,$03,$0e,$06,$0b,$0c,$0b
-NfxCubeRow:          !byte 6,7,8,9,10,11,13,14,15,16,17,18,8,10,14,16
-NfxCubePhase:        !byte 0,3,6,9,12,15,18,21,24,27,30,1,4,10,16,22
 
 NfxWireTitle:     !scr "wire cube clean" : !byte $ff
 NfxInfinityTitle: !scr "infinity corridor" : !byte $ff
@@ -5554,8 +5193,10 @@ nw_update:
         and #$0f
         tax
         lda NfxCoolPalette,x
+        sta BORDER
         lda #$00
-        ; clear active rows only, keep row 24 for scroller
+        sta BKG
+        ; Clear active rows only; leave the final row untouched.
         ldx #3
 .nw_clear_row:
         lda ScrRowLo,x
@@ -5617,10 +5258,11 @@ nw_update:
         tay
         lda NfxCoolPalette,y
         sta ET0
-        ; restore Y target by recomputing mirrored col through X/phase
+        ; Recompute the mirrored column with the same phase and beat offset.
         txa
         clc
         adc nw_phase
+        adc sndPulse
         eor #$1f
         and #$1f
         tay
@@ -5659,7 +5301,9 @@ ic_update:
         and #$0f
         tax
         lda NfxCorridorBg,x
+        sta BKG
         lda NfxCorridorBorder,x
+        sta BORDER
 .ic_row_loop:
         ldx ic_row_temp
         lda ScrRowLo,x
@@ -5730,7 +5374,9 @@ gt_update:
         and #$07
         tax
         lda NfxGoldBorder,x
+        sta BORDER
         lda #$00
+        sta BKG
 .gt_row_loop:
         ldx gt_row_temp
         lda ScrRowLo,x
@@ -5869,10 +5515,8 @@ gt_col_y !byte 0
 ; -----------------------------------------------------------------------------
 ; CUBE V3 ROTOR FINAL - stable text-mode 3D wire cube
 ; -----------------------------------------------------------------------------
-; The previous placeholder only plotted 16 moving points and cleared four rows,
-; so the cube could look broken/trail-heavy or invisible.  This version draws a
-; real two-plane wire cube every frame: front square, rear square, and four depth
-; connectors.  It stays in rows 4..22, leaving row 24 for the global scroller.
+; Draw a two-plane wire cube every frame: front square, rear square, and four
+; depth connectors. It stays in rows 4..22, leaving the final row untouched.
 cv_phase !byte 0
 cv_init:
         jsr ClearScreenColor
@@ -5924,7 +5568,7 @@ CvClearField:
         bpl .cv_cf_col
         inc cv_row_draw
         lda cv_row_draw
-        cmp #23                 ; clear rows 4..22 only; row 24 is scroller
+        cmp #23                 ; clear rows 4..22 only
         bne .cv_cf_row
         rts
 
@@ -6366,10 +6010,6 @@ CvCoreYTbl:
         !byte 12,11,10,10,11,12,13,14,15,16,16,15,14,13,12,11
         !byte 10,9,10,12,14,16,17,18,17,16,14,12,10,9,10,11
 
-; Legacy compatibility markers kept for audit readability; geometry now uses CvFrameGeom.
-CvInsetTbl:  !byte 0,1,2,3,3,2,1,0
-CvDepthX:    !byte 5,4,3,2,5,6,7,6
-CvDepthY:    !byte 3,3,2,1,3,3,2,1
 !zone
 
 ;  >>> Berlin techno (replaces dreamy, styles 2 & 3) <<<
@@ -6605,9 +6245,7 @@ HeartShapeMask:
 HeartShapeLo: !for r,0,23 { !byte <(HeartShapeMask + r*40) }
 HeartShapeHi: !for r,0,23 { !byte >(HeartShapeMask + r*40) }
 
-MenuNamePalette: !byte $01,$07,$03,$0d   ; white, yellow, cyan, lt-green (menu name pulse)
-
 !if * > $c000 {
-        !error "megademo overruns $c000! end = ", *
+        !error "subway demo overruns $c000! end = ", *
 }
 !warn "3SID v6.0 end = ", *, "  (", * - $0801, " bytes)"

@@ -30,6 +30,7 @@ Progression: Am – C – G – F
 - one beat every four rows
 - arp phases 0, 2 and 4
 - effects remain bar-locked
+- at 50 Hz PAL timing, this is approximately 107 BPM
 
 ## Mix
 - kick sidechain shortened to seven frames
