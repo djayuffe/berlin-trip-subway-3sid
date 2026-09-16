@@ -4736,8 +4736,8 @@ SongFiltLo: !byte <MUS_FILT,<Song1Filt,<BerlinAFilt,<BerlinBFilt,<TechnoAFilt,<T
 SongFiltHi: !byte >MUS_FILT,>Song1Filt,>BerlinAFilt,>BerlinBFilt,>TechnoAFilt,>TechnoBFilt,>TechnoCFilt,>AcidAFilt,>AcidBFilt, >TranceAFilt,>TranceBFilt
 
 ; per-style instrument / mix (A/B pairs identical so 512-row tunes are seamless)
-StyleBassWaveTbl: !byte $21,$41,$21,$21,$41,$41,$61,$41,$61,$21,$61 ; v6.0 Berlin composition 3SID mix
-StyleArpWaveTbl: !byte $41,$41,$41,$41,$15,$13,$61,$15,$61,$41,$61 ; v6.0 Berlin composition 3SID mix
+StyleBassWaveTbl: !byte $21,$41,$21,$21,$41,$41,$61,$41,$61,$21,$61 ; Berlin composition 3SID mix
+StyleArpWaveTbl: !byte $41,$41,$41,$41,$15,$13,$61,$15,$61,$41,$61 ; Berlin composition 3SID mix
 StyleSpeedTbl: !byte 7,7,7,7,7,7,7,7,7,7,7 ; v5.7 stable Berlin groove
 StyleResTbl: !byte $62,$62,$72,$82,$72,$72,$72,$72,$72,$72,$72 ; v5.7 Berlin filter
 StyleXposeTbl:    !byte 0,   0,   0,0,     0,0,0,   0,0, 0,0
@@ -5967,4 +5967,4 @@ HeartShapeHi: !for r,0,23 { !byte >(HeartShapeMask + r*40) }
 !if * > $c000 {
         !error "subway demo overruns $c000! end = ", *
 }
-!warn "3SID v6.0 end = ", *, "  (", * - $0801, " bytes)"
+!warn "Berlin Trip Subway end = ", *, "  (", * - $0801, " bytes)"

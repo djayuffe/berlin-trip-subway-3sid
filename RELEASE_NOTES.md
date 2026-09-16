@@ -1,4 +1,4 @@
-# Berlin Trip Subway 3SID v6.0.0
+# Berlin Trip Subway 3SID
 
 Berlin Trip Subway 3SID is a 28-scene C64 text-mode demo with a timing-locked
 three-SID soundtrack. This release packages the assembled PRG and the complete,
@@ -17,7 +17,7 @@ audited source needed to reproduce it.
 
 ## Running the demo
 
-The PRG is `build/berlin-trip-subway-3sid-v6.0.0.prg` inside the archive.
+The PRG is `build/berlin-trip-subway-3sid.prg` inside the archive.
 For full sound, configure an emulator or hardware for SIDs at `$d400`, `$d420`,
 and `$d440`. With VICE x64sc:
 
@@ -28,6 +28,6 @@ make run
 ## Verification and source
 
 Run `make check` to rebuild the PRG and validate the tracked-source checksum
-manifest. `docs/ARCHITECTURE.md` maps the runtime, every active effect, and all
-global callable routines. `AUDIT.md` records the code and build cleanup applied
-before this release.
+manifest. `docs/ARCHITECTURE.md` maps the runtime and global callable routines;
+`docs/EFFECTS.md` explains every active effect. `AUDIT.md` records the code and
+build cleanup applied before this release.

@@ -20,8 +20,9 @@ make run
 ```
 
 `make run` starts VICE with two additional SIDs at the addresses used by the
-source. The assembled program is written to
-`build/berlin-trip-subway-3sid-v6.0.0.prg`.
+source. The assembled program is always written to
+`build/berlin-trip-subway-3sid.prg`; only versioned release archives use a
+version in their filename.
 
 ## Design
 
@@ -40,6 +41,8 @@ The source-level music review is retained in
 arrangement notes are in [`V6_0_0_NOTES.md`](V6_0_0_NOTES.md). See
 [`AUDIT.md`](AUDIT.md) for the repository cleanup and verification record, and
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) for the effect and function map.
+[`docs/EFFECTS.md`](docs/EFFECTS.md) describes the rendering and timing of every
+active scene.
 Release-specific setup and contents are documented in
 [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
 
