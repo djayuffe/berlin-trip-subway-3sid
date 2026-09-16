@@ -8,16 +8,38 @@ treated as independent functions.
 ## Runtime flow
 
 ```text
-BASIC SYS stub → MegaMain → SetupVIC / TV_MusInit / SeedRand
+BASIC `10 SYS 2061` → `$080d` `BootStart` → `MegaMain`
+                                                ↓
+                         SetupVIC / TV_MusInit / SeedRand
                        → InstallIRQ
 IRQ at raster line 250 → TV_PlayMusic → ComputeVisualPulses → frameReady
 MainLoop → snapshot row/beat edges → UpdatePart or StepTransition
          → ThreeSIDEffectPolish → next IRQ frame
 ```
 
+`BootStart` is an unconditional `JMP MegaMain`, not a fall-through convention.
+The source asserts that the BASIC line ends exactly at `$080d`, protecting the
+decimal `SYS 2061` target from later loader edits.
+
 The main loop and the IRQ communicate through sticky row/beat flags. The main
 loop clears those flags while interrupts are briefly disabled, preventing a
 longer visual renderer from losing a musical boundary.
+
+## Frame and scene lifecycle
+
+1. `MegaMain` initializes the video, music, scene 0, and the IRQ.
+2. The IRQ executes every PAL frame, runs the music engine, derives pulse data,
+   and sets `frameReady`.
+3. `MainLoop` waits for that flag, then atomically copies `TV_RowEdge` and
+   `TV_BeatEdge` into its private main-loop flags.
+4. `UpdatePart` tail-dispatches the selected renderer. Renderers return to the
+   main loop rather than owning interrupts or scene timers.
+5. At a bar boundary, the scheduler arms the fade. `TransCard` colours the
+   frame from row 12 through row 15; the new scene initializes on the next
+   row-0 edge.
+
+This separation is deliberate: music timing stays in the IRQ, while the
+heavier text/colour RAM work stays outside it.
 
 ## Active effects
 
@@ -113,3 +135,20 @@ then starts its fade at row 12 and changes scene on the next row 0.
 - `SPTR`/`CPTR` are effect scratch pointers; `ZP_MLO..ZP_BHI` are reserved for IRQ music pointers. Do not reuse them across those domains.
 - Music pattern value `$ff` means silence. Pattern rows are zero-based and Berlin A/B use 64 rows.
 - The assembly-time `$c000` guard prevents code/data from entering the KERNAL ROM region.
+
+## Memory and ownership map
+
+| Range | Owner | Use |
+| --- | --- | --- |
+| `$0801`–program end | Demo | BASIC stub, boot trampoline, code, and static effect/music data. |
+| `$0002`–`$0006` | Main loop | Small temporary values and text-pointer scratch storage. |
+| `$00f7`–`$00fa` | IRQ music | Pattern-table pointers; effects must not reuse them. |
+| `$00fb`–`$00fe` | Renderers | Screen and colour RAM pointers. |
+| `$0400`–`$07e7` | VIC/text renderers | 1,000 screen-code cells. |
+| `$1000` | VIC view | ROM character set visible through the selected bank configuration. |
+| `$d400`, `$d420`, `$d440` | SID chips | Bass/sub, melodic, and drum register banks. |
+| `$d800`–`$dbe7` | VIC/text renderers | 1,000 colour-RAM nibbles. |
+
+The program keeps I/O and KERNAL visible because the IRQ chain continues into
+the KERNAL handler. BASIC ROM is banked out during the demo; the PRG itself
+does not rely on BASIC after the initial `SYS` call.

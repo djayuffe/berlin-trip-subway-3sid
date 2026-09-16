@@ -14,6 +14,8 @@ audited source needed to reproduce it.
   and approximately 107 BPM PAL timing.
 - A single raster IRQ at line 250 keeps music, beat pulses, transitions, and
   effect timing synchronized.
+- A fixed `$080d` boot trampoline protects the BASIC `SYS 2061` entry target
+  and transfers control to the machine-code initialization routine.
 
 ## Running the demo
 
@@ -31,3 +33,6 @@ Run `make check` to rebuild the PRG and validate the tracked-source checksum
 manifest. `docs/ARCHITECTURE.md` maps the runtime and global callable routines;
 `docs/EFFECTS.md` explains every active effect. `AUDIT.md` records the code and
 build cleanup applied before this release.
+
+The source archive also includes the README preview captures and their
+checksums, so public documentation remains reproducible with the code.

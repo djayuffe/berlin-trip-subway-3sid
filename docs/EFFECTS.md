@@ -11,6 +11,27 @@ top, SID2 a lower rail, and SID3 the side accents.
 music clock. Effects consume these values rather than reading SID registers,
 which keeps audio and rendering timing separate.
 
+## How scenes are built
+
+Every scene has an initializer and an update routine. Initializers reset local
+phase/state and clear or prepare their text cells. Update routines are called
+from the frame-driven main loop and either redraw their owned field completely
+or first erase the previously plotted cells. No scene changes the IRQ setup,
+VIC video mode, SID register ownership, or global scene timer.
+
+The 28 scenes fall into four rendering families:
+
+| Family | Scene IDs | Shared approach |
+| --- | --- | --- |
+| Full-field procedural | 0–5, 7, 9–16, 18–20, 24–26 | Compute glyph and colour from row, column, phase, and pulse inputs. |
+| Particle/state based | 2, 6 | Keep compact star coordinates, erase old cells, then plot updated positions. |
+| Mask/table geometry | 8, 12, 17, 21–23, 27 | Read precomputed masks, rails, coordinate frames, or mirrored points. |
+| Shared polish | all scenes | `ThreeSIDEffectPolish` adds audio-reactive colour rails after the scene update. |
+
+The active render area is rows 0–23. Scene code therefore avoids using row 24
+as a persistent drawing surface, leaving a safe margin for runtime conventions
+and future presentation changes.
+
 ## 0. 3SID pulse field — `ti_init`, `ti_update`
 
 The opening is a full-field procedural pattern. Character selection combines

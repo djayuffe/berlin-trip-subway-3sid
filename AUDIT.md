@@ -17,9 +17,17 @@ import.
   same, and the wire-cube mirror colour uses the same beat offset as its glyph.
 - Removed disabled split-IRQ, scroller, empty title-card, dead timing-table,
   unused palette, and obsolete compatibility scaffolding.
+- Added a fixed `$080d` `BootStart` jump from `SYS 2061` to `MegaMain`, with an
+  assembly-time address assertion so loader edits cannot move the entry point.
+- Normalized public-facing documentation: emulator/SID setup, boot contract,
+  reproducible build commands, repository map, runtime data ownership, and
+  effect rendering families are now documented alongside verified VICE captures.
 
 ## Verification
 
 `make check` performs a fresh ACME build and validates the tracked-source
 checksum manifest. A bounded VICE console smoke test has also been run using
 SID addresses `$d400`, `$d420`, and `$d440`.
+
+The boot path was additionally checked in VICE from the BASIC loader through
+`SYS 2061`, the `$080d` trampoline, and into a rendered effect frame.
