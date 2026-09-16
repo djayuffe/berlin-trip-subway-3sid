@@ -17,14 +17,27 @@
 
 !cpu 6502
 
-; ------- BASIC stub: 10 SYS 2061 -------
-* = $0801
+; ------- BASIC boot stub: 10 SYS 2061 -> $080d boot jump -------
+; Keep this fixed-address trampoline separate from initialization.  BASIC's
+; SYS operand is decimal, so an explicit jump prevents future stub edits from
+; silently moving the machine-code entry point.
+BASIC_START = $0801
+BOOT_ENTRY  = $080d
+
+* = BASIC_START
         !word stub_end, 10
         !byte $9e
         !text "2061"
         !byte 0
 stub_end:
         !word 0
+
+!if * != BOOT_ENTRY {
+        !error "BASIC stub no longer ends at $080d"
+}
+
+BootStart:
+        jmp MegaMain
 
 ; ============================================================================
 ;  Shared hardware constants
@@ -151,7 +164,7 @@ ET2     = $04
 ET3     = $ff
 
 ; ============================================================================
-;  ENTRY  (immediately after the BASIC stub, at $080d = SYS 2061)
+;  INITIALIZATION ENTRY (reached through BootStart at $080d)
 ; ============================================================================
 MegaMain:
         sei
